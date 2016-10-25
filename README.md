@@ -1,2 +1,2 @@
 # mark_follower
-Follow target or moving objects
+Follows target or moving objects
