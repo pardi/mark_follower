@@ -1,0 +1,2 @@
+mark_follower/challenge: true # false -> first challenge, true -> third challenge
+mark_follower/sitl: false # false -> sitl disable, true -> sitl enabled

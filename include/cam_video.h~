@@ -1,0 +1,150 @@
+#ifndef __CAM_VIDEO_H__
+#define __CAM_VIDEO_H__
+
+// #include <ros/ros.h>
+#include <uEye.h>
+#include <ueye_deprecated.h>
+#include <wchar.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <iostream>
+#include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
+#include <sys/time.h>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+#include <sstream>
+
+#define CAM_VIDEO_WIDTH 	1280
+#define CAM_VIDEO_HEIGHT 	720
+#define CAM_VIDEO_BPP 		24
+
+// WHITE HSV CHANNEL
+#define CAM_WHITE_H_MIN		0
+#define CAM_WHITE_H_MAX		80
+#define CAM_WHITE_S_MIN		00
+#define CAM_WHITE_S_MAX		80
+#define CAM_WHITE_V_MIN		60
+#define CAM_WHITE_V_MAX		255
+// BLACK HSV CHANNEL
+#define CAM_BLACK_H_MIN		0
+#define CAM_BLACK_H_MAX		120
+#define CAM_BLACK_S_MIN		0
+#define CAM_BLACK_S_MAX		120
+#define CAM_BLACK_V_MIN		0
+#define CAM_BLACK_V_MAX		120
+// BLUE HSV CHANNEL
+#define CAM_BLUE_LH			0
+#define CAM_BLUE_HH			255
+#define CAM_BLUE_LS			0
+#define CAM_BLUE_HS 		255
+#define CAM_BLUE_LV 		0
+#define CAM_BLUE_HV			255
+// RED HSV CHANNEL
+#define CAM_RED_LH			0
+#define CAM_RED_HH			255
+#define CAM_RED_LS			0
+#define CAM_RED_HS	 		255
+#define CAM_RED_LV 			0
+#define CAM_RED_HV			255
+// GREEN HSV CHANNEL
+#define CAM_GREEN_LH		0
+#define CAM_GREEN_HH		255
+#define CAM_GREEN_LS		0
+#define CAM_GREEN_HS 		255
+#define CAM_GREEN_LV 		0
+#define CAM_GREEN_HV		255
+
+#define VIDEO_NAME			"recognition"
+#define VIDEO_RAW_NAME		"recognition_raw"
+
+
+using namespace std;
+
+namespace cam_vid {
+
+	struct descriptor{
+		cv::Mat img;
+		cv::Point origin;
+		double alpha;
+	};
+
+	enum th_color { 
+		CAM_WHITE,
+		CAM_BLACK
+	};
+
+	enum colors {
+		BLUE,
+		RED,
+		GREEN
+	};
+
+	class cam_video{
+
+	public:
+
+		cam_video(const HIDS, const int, const bool verbose = false);
+		
+		~cam_video();
+
+		void start_capture();
+
+	private:
+
+		bool init();
+		void terminate_on_error();
+
+		void get_frame();
+		void get_frame(const char*);
+
+		void get_static_frame();
+
+		cv::Mat morph_operation(cv::Mat, const bool inv = false);
+		cv::Mat otsuTH(cv::Mat, bool inv = false);
+		void matching(descriptor, cv::Mat);
+		vector<descriptor> get_blob(const cv::Mat);
+		cv::Mat adjust_rotation(descriptor);
+		cv::Mat LHE_operation(cv::Mat);
+		void mark_obj(string, const cv::Point, const cv::Point, const cv::Scalar);
+		cv::Mat color_detection(const cv::Mat, const colors);
+
+		// Kalman Function
+
+		void init_kalman(const cv::Point);
+		cv::Point kalman(const cv::Point);
+
+		// Further functions
+
+		float approx_perpendicular(double, double);
+		void find_best_perpendicular_match(vector<double>);
+		void sameQ(vector<double> &, vector<double>&);
+ 		void plotHist();
+
+		double diff_ms(const timeval, const timeval);
+
+		// Variables
+
+		bool verbose_;
+
+		HIDS hCam_;
+		int fps_;
+		bool is_ok_;
+
+		cv::Mat ocvMat_;
+
+	    cv::VideoWriter outVid_;
+	    cv::VideoWriter outVidRAW_;
+
+	    cv::KalmanFilter* KF_;
+	    bool state_kf_;
+
+	    cv::Point target_;
+
+	    int HSVmin[3];
+	    int HSVmax[3];
+
+	};
+} 
+#endif 
+

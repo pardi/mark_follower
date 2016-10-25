@@ -1,0 +1,991 @@
+#include "cam_video.h"
+
+using namespace cam_vid;
+using namespace cv;
+
+cam_video::cam_video(const HIDS id, const int fps, const bool verbose){
+
+    hCam_ = id;
+    verbose_ = verbose;
+
+    // Initialize vars
+
+    int img_step;
+    int img_data_size;
+
+    fps_ = fps;
+
+    ocvMat_ = Mat(CAM_VIDEO_HEIGHT, CAM_VIDEO_WIDTH, CV_8UC3);
+
+    if (!init()){
+        is_ok_ = false;
+        terminate_on_error();
+        return;
+    }
+
+    is_ok_ = true;
+
+    // Kalman Filter Init bool vars
+    state_kf_ = false;
+
+    int ex = static_cast<int>(CV_FOURCC('M','P','4','V')); 
+
+    // Transform from int to char via Bitwise operators
+    char EXT[] = {(char)(ex & 0XFF) , (char)((ex & 0XFF00) >> 8),(char)((ex & 0XFF0000) >> 16),(char)((ex & 0XFF000000) >> 24), 0};
+    
+    string number;
+    stringstream strstream;
+    strstream << (long int) time(NULL);
+    strstream >> number;
+
+    String str = VIDEO_NAME;
+    str += "_" + number + ".avi";
+
+    outVid_.open(str.c_str(), ex, 15.0, Size( CAM_VIDEO_WIDTH, CAM_VIDEO_HEIGHT ), true);
+
+    str = VIDEO_RAW_NAME;
+    str += "_" + number + ".avi";
+
+    outVidRAW_.open(str.c_str(), ex, 15.0, Size( CAM_VIDEO_WIDTH, CAM_VIDEO_HEIGHT ), true);
+
+}
+
+void cam_video::start_capture(){
+
+    if (!is_ok_)
+        return;
+
+    cout << "- CaptureVideo Enabled --> ";
+    /*
+    if (is_CaptureVideo (hCam_, IS_WAIT) != IS_SUCCESS)
+        terminate_on_error();
+    else
+        cout << "OK" << endl;
+    */    
+
+    struct timeval time_after, time_before;
+
+    // get current time  
+    gettimeofday(&time_after, NULL);
+    time_before = time_after;
+
+    // Mat tmpl = imread("/home/ubuntu/ueye/camera_class/template.jpg", CV_LOAD_IMAGE_COLOR );
+    Mat tmpl = imread("../template.jpg", CV_LOAD_IMAGE_COLOR );
+    Mat thr;
+    vector<descriptor> blob_desc;
+
+
+    while (waitKey(30) == -1) {
+
+        /// Time manager
+
+        gettimeofday(&time_after, NULL);
+
+        cout << "Time: " << diff_ms(time_after, time_before) << endl;
+
+        time_before = time_after;
+        
+        /// --- 
+        
+        // Get Frame runtime
+        get_frame();
+
+        // Get Frame offline
+        // get_static_frame();
+       
+        // Otsu Threshold method on getted image
+
+        thr = otsuTH(ocvMat_, true);
+
+        // Show otsu result
+        // imshow("Otsu dTH", thr );
+
+        // Morphologic operations
+        thr = morph_operation(thr);
+
+        // When image is empty go to the next frame
+        if (thr.empty())
+            continue;
+        
+        // Get contours of the blobs
+
+        blob_desc = get_blob(thr);
+
+        // Perform LHE operations
+
+	    // thr = LHE_operation(ocvMat_);
+
+        // Call matching funciton on the blob descriptor discovered by get_blob()
+
+
+        for (int i = blob_desc.size(); i--;)
+            matching(blob_desc[i], tmpl);
+
+
+        // Draw point
+
+        circle( ocvMat_, target_, 2, Scalar(255, 0, 0), 3, 16);
+
+        // Show LHE result
+
+        // imshow("LHE", thr );
+
+        // Show Original image
+
+        imshow("Original Img", ocvMat_); 
+
+        // Rec video
+        // outVid_ << ocvMat_;
+        
+    }
+
+    cout << "A key is pressed by user" << endl;
+}
+
+
+cam_video::~cam_video(){
+    is_ExitCamera(hCam_);
+}
+
+bool cam_video::init(){
+    
+    double enable = 1;
+    double disable = 0;
+
+    // Init camera
+
+    cout << "- Init camera --> ";
+
+    if(is_InitCamera (&hCam_, NULL) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+
+    // Memory allocation and display
+    cout << "- Alloc Image Mem --> ";
+
+    char* imgMem;
+    int memId;
+
+    if (is_AllocImageMem(hCam_, CAM_VIDEO_WIDTH, CAM_VIDEO_HEIGHT, CAM_VIDEO_BPP, &imgMem, &memId) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+
+    cout << "- Set Image Mem --> ";
+
+    if (is_SetImageMem (hCam_, imgMem, memId) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+    
+    cout << "- Set Display Mode --> ";
+
+    if (is_SetDisplayMode (hCam_, IS_SET_DM_DIB) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+    
+    cout << "- Set Color Mode --> ";
+
+    if (is_SetColorMode (hCam_, IS_SET_CM_RGB24) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+    
+    cout << "- Set Image Size --> ";
+
+    if (is_SetImageSize (hCam_, CAM_VIDEO_WIDTH, CAM_VIDEO_HEIGHT) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+    
+    // Params
+
+    // cout << "- Auto Gain --> ";
+
+    // if (is_SetAutoParameter (hCam_, IS_SET_ENABLE_AUTO_GAIN, &enable, 0) != IS_SUCCESS)
+    //     return false;
+    // else
+    //     cout << "OK" << endl;
+    
+    // cout << "- Auto WhiteBalance --> ";
+
+    // if (is_SetAutoParameter (hCam_, IS_SET_ENABLE_AUTO_WHITEBALANCE, &enable, 0) != IS_SUCCESS)
+    //     return false;
+    // else
+    //     cout << "OK" << endl;
+    
+    // cout << "- Auto FrameRate --> ";
+
+    // if (is_SetAutoParameter (hCam_, IS_SET_ENABLE_AUTO_FRAMERATE, &disable, 0) != IS_SUCCESS)
+    //     return false;
+    // else
+    //     cout << "OK" << endl;
+    
+    // cout << "- Auto Shutter --> ";
+
+    // if (is_SetAutoParameter (hCam_, IS_SET_ENABLE_AUTO_SHUTTER, &disable, 0) != IS_SUCCESS)
+    //     return false;
+    // else
+    //     cout << "OK" << endl;
+    
+    // cout << "- Auto Sensor Gain --> ";
+
+    // if (is_SetAutoParameter (hCam_, IS_SET_ENABLE_AUTO_SENSOR_GAIN, &enable, 0)!= IS_SUCCESS)
+    //     return false;
+    // else
+    //     cout << "OK" << endl;
+    
+    // cout << "- Auto Sensor WhiteBalance --> ";
+
+    // if (is_SetAutoParameter (hCam_, IS_SET_ENABLE_AUTO_SENSOR_WHITEBALANCE,&enable,0) != IS_SUCCESS)
+    //     return false;
+    // else
+    //     cout << "OK" << endl;
+    
+    // cout << "- Auto Sensor Shutter --> ";
+    
+    // if (is_SetAutoParameter (hCam_, IS_SET_ENABLE_AUTO_SENSOR_SHUTTER, &disable, 0) != IS_SUCCESS)
+    //     return false;
+    // else
+    //     cout << "OK" << endl;
+    
+    double NEWFPS;
+
+    cout << "- Set FrameRate --> ";
+
+    // Set FrameRate
+    if (is_SetFrameRate(hCam_, fps_, &NEWFPS) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+    
+    double parameter = 50;
+    
+    cout << "- Set Exposure --> ";
+
+    // Exposure set
+    if (is_Exposure(hCam_, IS_EXPOSURE_CMD_SET_EXPOSURE, (void*) &parameter, sizeof(parameter)) != IS_SUCCESS) 
+        return false;
+    else
+        cout << "OK" << endl;
+    
+    UINT uiCaps = 0;
+
+    cout << "- Enable AutoFocus --> ";
+
+    // Focus camera
+    if (is_Focus (hCam_, FOC_CMD_GET_CAPABILITIES, &uiCaps, sizeof (uiCaps) ) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+
+    cout << "- Check if AutoFocus is Enable --> ";
+
+    if (is_Focus (hCam_, FOC_CMD_GET_AUTOFOCUS_ENABLE, &uiCaps, sizeof (uiCaps) ) != IS_SUCCESS)
+        return false;
+
+    // Check on supporting of focus option
+
+    if (uiCaps != 1)
+        cout << "NO" << endl;
+    else
+        cout << "YES" << endl;
+
+    // Get pixel clock range
+    UINT nRange[3];
+    UINT nMin = 0, nMax = 0, nInc = 0;
+
+    ZeroMemory(nRange, sizeof(nRange));
+
+    cout << "- Pixelclock get range --> ";
+
+    if (is_PixelClock(hCam_, IS_PIXELCLOCK_CMD_GET_RANGE, (void*)nRange, sizeof(nRange)) == IS_SUCCESS)
+    {
+        cout << "OK" << endl;
+        nMin = nRange[0];
+        nMax = nRange[1];
+        nInc = nRange[2];
+        if (verbose_){
+            cout << "\tMin: " << nMin << endl;
+            cout << "\tMax: " << nMax << endl;
+            cout << "\tInc: " << nInc << endl;
+        }
+    }
+    else
+        return false;
+    
+    cout << "- Set Pixelclock --> ";
+
+    if(is_PixelClock(hCam_, IS_PIXELCLOCK_CMD_SET, (void*)&nMin, sizeof(nMin)) != IS_SUCCESS)
+        return false;
+    else
+        cout << "OK" << endl;
+    
+
+    return true;
+}
+
+// Terminate on camera error 
+void cam_video::terminate_on_error(){
+
+    INT pErr;
+    IS_CHAR* ppcErr;
+
+    is_GetError(hCam_, &pErr, &ppcErr);
+
+    cout << "Error" << endl;
+    cout << "Code: " << pErr << endl;
+    cout << "Text: " << ppcErr << endl;
+
+    is_ExitCamera(hCam_);
+
+}
+// Get Frame from ids camera
+
+void cam_video::get_frame(){
+
+    //pointer to where the image is stored
+    uchar* pMemVoid; 
+    
+    // Pointer on matrix
+    uchar* x = ocvMat_.ptr();
+
+    if (verbose_)
+        cout << "- Get an Image mem --> ";
+
+    // Get Image from camera
+    if ( is_GetImageMem (hCam_, (void**) &pMemVoid) != IS_SUCCESS){
+        if (verbose_)
+            terminate_on_error();
+    }
+    else{
+        if (verbose_)
+            cout << "OK" << endl;
+    }
+
+    // Copy img in Mat structure
+
+    for (int i = CAM_VIDEO_WIDTH * CAM_VIDEO_HEIGHT * 3; i--; )
+        x[i] = (uchar) pMemVoid[i];
+
+}
+
+// Get Frame from webcam 
+
+void cam_video::get_frame(const char* str){
+
+    VideoCapture inputVideo(str);              // Open input
+    if (!inputVideo.isOpened())
+    {
+        cout  << "Could not open the input video: " << str << endl;
+        return;
+    }
+
+    inputVideo >> ocvMat_;
+
+}
+
+// Get Frame offline
+
+void cam_video::get_static_frame(){
+
+    ocvMat_ = imread("../img/img2.png", CV_LOAD_IMAGE_COLOR);
+
+}
+
+float cam_video::approx_perpendicular(double m1, double m2){
+
+    return -1.0 - (m1 * m2);
+}
+
+void cam_video::find_best_perpendicular_match(vector<double> m){
+
+    double best = 1000;
+    int idx = 0;
+
+    Mat match = Mat::zeros(m.size(), m.size(), CV_8UC1);
+
+    for (int j = 0; j < m.size(); j++)
+        for (int i = 0; i < m.size(); i++){
+            match.at<double>(i,j) = approx_perpendicular(m[j], m[i]);
+            // cout << match.at<double>(i,j) << " " << approx_perpendicular(m[j], m[i]) << endl;
+        }
+
+    // cout << match << endl;
+
+    for (int j = 0; j < m.size(); j++){
+
+        for (int i = 0; i < m.size(); i++){
+            if (match.at<double>(i, j) < best){
+                best = match.at<double>(i, j);
+                idx = i;
+            }
+        }
+        if (best != 1000)
+            // cout << match.at<double>(idx, j) << " " << j << " " << idx << endl;
+
+        best = 1000;
+        idx = 0;
+    }
+
+
+}
+
+void cam_video::sameQ(vector<double> &m, vector<double>& q){
+
+    vector<double> m_buf;
+    vector<double> q_buf;
+    vector<int> idx;
+
+    bool nearest = true;
+
+    while(nearest){
+
+        nearest = false;
+
+        double M = m[0];
+        double Q = q[0];
+
+        idx.push_back(0);
+
+        for (int i = 1; i < m.size(); i++){
+
+           if (fabs(M - m[i]) < .5){
+                if (fabs(Q - q[i]) < 50){
+                    nearest = true;
+                    idx.push_back(i);
+                }
+                else{
+                    m_buf.push_back(m[i]);
+                    q_buf.push_back(q[i]);
+                }
+            }
+            else{
+                    m_buf.push_back(m[i]);
+                    q_buf.push_back(q[i]);
+            }
+        }
+
+        double sum = 0;
+        
+        for (int i = 0; i < idx.size(); i++)
+            sum += q[idx[i]];
+
+        sum /= idx.size();
+
+        m_buf.push_back(M);
+        q_buf.push_back(sum);
+
+
+        // cout << "bufS" << m_buf.size() << " " << sum << endl;
+
+        // for (int i = 0; i < q_buf.size(); ++i)
+        //     cout << q_buf[i] << " ";
+
+        // cout << endl;
+
+        if (nearest == true){
+            m = m_buf;
+            q = q_buf;
+        }
+
+
+        m_buf.clear();
+        q_buf.clear();
+        idx.clear();
+    }
+}
+
+
+void cam_video::plotHist(){
+
+   Mat src;
+
+   // cvtColor(ocvMat_, src, COLOR_RGB2HSV);
+
+   src=ocvMat_;
+
+ /// Separate the image in 3 places ( B, G and R )
+  vector<Mat> bgr_planes;
+  split( src, bgr_planes );
+
+  /// Establish the number of bins
+  int histSize = 256;
+
+  /// Set the ranges ( for B,G,R) )
+  float range[] = { 0, 256 } ;
+  const float* histRange = { range };
+
+  bool uniform = true; bool accumulate = false;
+
+  Mat b_hist, g_hist, r_hist;
+
+  /// Compute the histograms:
+  calcHist( &bgr_planes[0], 1, 0, Mat(), b_hist, 1, &histSize, &histRange, uniform, accumulate );
+  calcHist( &bgr_planes[1], 1, 0, Mat(), g_hist, 1, &histSize, &histRange, uniform, accumulate );
+  calcHist( &bgr_planes[2], 1, 0, Mat(), r_hist, 1, &histSize, &histRange, uniform, accumulate );
+
+  // Draw the histograms for B, G and R
+  int hist_w = 512; int hist_h = 400;
+  int bin_w = cvRound( (double) hist_w/histSize );
+
+  Mat histImage( hist_h, hist_w, CV_8UC3, Scalar( 0,0,0) );
+
+  /// Normalize the result to [ 0, histImage.rows ]
+  normalize(b_hist, b_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
+  normalize(g_hist, g_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
+  normalize(r_hist, r_hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
+
+  /// Draw for each channel
+  for( int i = 1; i < histSize; i++ )
+  {
+      // line( histImage, Point( bin_w*(i-1), hist_h - cvRound(b_hist.at<float>(i-1)) ) ,
+                       // Point( bin_w*(i), hist_h - cvRound(b_hist.at<float>(i)) ),
+                       // Scalar( 255, 0, 0), 2, 8, 0  );
+      line( histImage, Point( bin_w*(i-1), hist_h - cvRound(g_hist.at<float>(i-1)) ) ,
+                       Point( bin_w*(i), hist_h - cvRound(g_hist.at<float>(i)) ),
+                       Scalar( 0, 255, 0), 2, 8, 0  );
+      line( histImage, Point( bin_w*(i-1), hist_h - cvRound(r_hist.at<float>(i-1)) ) ,
+                       Point( bin_w*(i), hist_h - cvRound(r_hist.at<float>(i)) ),
+                       Scalar( 0, 0, 255), 2, 8, 0  );
+  }
+
+  /// Display
+    namedWindow("calcHist Demo", CV_WINDOW_AUTOSIZE );
+    imshow("calcHist Demo", histImage );
+
+}
+
+Mat cam_video::otsuTH(Mat src, bool inv){
+
+    cvtColor(src, src, COLOR_RGB2GRAY);
+
+    if (inv == true)
+        cv::threshold(src, src, 0, 255, CV_THRESH_BINARY_INV | CV_THRESH_OTSU);    
+    else
+        cv::threshold(src, src, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);    
+
+    return src;
+
+}
+
+void cam_video::matching(descriptor dsc, Mat tmpl){
+ 
+    Mat src = adjust_rotation(dsc);   
+
+    // Choose  match method
+
+    int match_method = CV_TM_CCOEFF_NORMED; // Try CV_TM_CCOEFF not normed
+    
+    Mat result;
+
+    // Source image to display
+    Mat img_display;
+
+    src.copyTo( img_display );
+
+    int coef_resize = 0;
+
+    // Define the coefficient to resize the template
+
+    if (src.cols > src.rows)
+        coef_resize = src.rows;
+    else
+        coef_resize = src.cols;
+    
+    Mat newTemplate;
+
+    // Resize template
+
+    resize(tmpl, newTemplate, Size((int) (coef_resize), (int)(coef_resize)));
+
+    tmpl = newTemplate;
+
+    /// Create the result matrix
+    int result_cols = src.cols + 1;
+    int result_rows = src.rows + 1;
+    
+    //cout << result_cols << " " << result_rows << " " << result_cols*result_rows <<endl;
+
+    // Check on double dimension of the image and its area
+    if (result_rows <= 0 || result_cols <= 0 || result_cols * result_rows < 4000)
+        return;
+
+    // Allocate new dimensions
+    result.create( result_rows, result_cols, CV_32FC1 );
+
+    /// Do the Matching and Normalize
+    matchTemplate( src, tmpl, result, match_method );
+    normalize( result, result, 0, 1, NORM_MINMAX, -1, Mat() );
+
+    /// Localizing the best match with minMaxLoc
+    double minVal; double maxVal; Point minLoc; Point maxLoc;
+    Point matchLoc;
+
+    minMaxLoc( result, &minVal, &maxVal, &minLoc, &maxLoc, Mat() );
+    /// For SQDIFF and SQDIFF_NORMED, the best matches are lower values. For all the other methods, the higher the better
+    if( match_method  == CV_TM_SQDIFF || match_method == CV_TM_SQDIFF_NORMED )
+    { matchLoc = minLoc; }
+    else
+    { matchLoc = maxLoc; }
+
+    /// Show me what you got
+    rectangle( img_display, matchLoc, Point( matchLoc.x + tmpl.cols , matchLoc.y + tmpl.rows ), Scalar::all(0), 2, 8, 0 );
+    rectangle( result, matchLoc, Point( matchLoc.x + tmpl.cols , matchLoc.y + tmpl.rows ), Scalar::all(0), 2, 8, 0 );
+
+    // Show result image
+    imshow( "Result window", img_display );
+
+    imshow( "Result operation windows", result );
+
+    // Center
+    target_.x = dsc.origin.x + maxLoc.x + tmpl.cols / 2;
+    target_.y = dsc.origin.y + maxLoc.y + tmpl.rows / 2;
+
+    // Kalman Filter 
+    if (!state_kf_){
+        init_kalman(target_);
+        state_kf_ = true;
+    }
+    else
+        target_ = kalman(target_);  
+    
+    // Create point with custom dimensions
+    Point fdsc(dsc.origin.x + dsc.img.cols, dsc.origin.y + dsc.img.rows);
+
+    // Draw square around the blob
+    mark_obj("target", dsc.origin, fdsc, Scalar(0,0,255));
+
+}
+
+vector<descriptor> cam_video::get_blob(const Mat src){
+
+    vector<vector<Point> > contours, cb;
+    vector<Vec4i> hierarchy;
+
+    float epsilon, area;
+    int minX, minY;
+    int maxX, maxY;
+    int cateto_a, cateto_b;
+
+    Mat drawing = Mat::zeros( src.size(), CV_8UC3 );
+
+    Mat blob;
+    descriptor bd;
+    vector<descriptor> blob_descriptor;
+
+    // Find contours
+    findContours(src, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+
+    // Check out contours appling a 5% approximation on the area
+    for (int i = 0; i < contours.size(); ++i){
+        area = arcLength(contours[i], true);
+
+        epsilon = 0.05 * area;
+
+        approxPolyDP(contours[i], contours[i], epsilon, true);
+        
+        // Save contours only if area is bigger the 50 and the section has 4 vertex
+        
+        if (contours[i].size() == 4 && area > 200)
+            cb.push_back(contours[i]);
+    }
+
+    
+    // Draw contours
+
+    if (cb.size() > 0)
+    {
+        // Draw line (blue)
+
+        for( int i = 0; i< contours.size(); i++ ){
+            Scalar color = Scalar( 255, 0, 0 );
+            drawContours( drawing, contours, i, color, 2, 8, hierarchy, 0, Point() );
+        }
+
+        // Draw vertex (red)
+
+        for (int i = 0; i < cb.size(); i++ )
+            for (int j = 0; j < cb[i].size(); j++ )
+                circle( drawing, cb[i][j], 2, Scalar(0, 0, 255), 3, 16);
+        
+    }
+    
+   // imshow("draw", drawing);
+
+    for (int i = 0; i < cb.size(); i++){
+        
+        minX = CAM_VIDEO_WIDTH;
+        minY = CAM_VIDEO_HEIGHT;
+        maxX = 0;
+        maxY = 0;
+
+        cateto_a = 0;
+        cateto_b = 0;
+
+        for (int j = 0; j < cb[i].size(); j++){
+            
+            if (cb[i][j].x > maxX)
+                maxX = cb[i][j].x;            
+
+            if (cb[i][j].x < minX){
+                minX = cb[i][j].x;
+                cateto_b = cb[i][j].y;
+            }
+
+            if (cb[i][j].y > maxY)
+                maxY = cb[i][j].y;        
+
+            if (cb[i][j].y < minY){
+                minY = cb[i][j].y;
+                cateto_b = cb[i][j].x;
+            }
+        }
+        // Save the blob from original image
+
+        blob = ocvMat_(Rect(minX, minY, maxX - minX, maxY - minY));
+
+        // Store information about the blob in a blob directory
+
+        bd.img = blob;
+        bd.origin.x = minX;
+        bd.origin.y = minY;
+
+        bd.alpha = atan2(cateto_a, cateto_b);
+
+
+        blob_descriptor.push_back(bd);
+        
+    }
+
+    return blob_descriptor;
+}
+
+
+Mat cam_video::morph_operation(Mat src, const bool inv){
+
+    if (inv){
+        erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+        dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+    }
+    else{
+        dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+        erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+    }
+
+    return src;
+}
+
+Mat cam_video::adjust_rotation(descriptor dsc){
+
+    return dsc.img;    
+}
+
+Mat cam_video::LHE_operation(Mat src){
+/*
+    Mat img_hist_equalized; 
+
+    cvtColor(src, src, CV_BGR2GRAY); //change the color image to grayscale image
+
+    // Equalize the histogram
+    equalizeHist(src, img_hist_equalized); 
+
+     vector<Mat> channels; 
+     Mat img_hist_equalized;
+
+     cvtColor(src, img_hist_equalized, CV_BGR2YCrCb); //change the color image from BGR to YCrCb format
+
+     split(img_hist_equalized,channels); //split the image into channels
+
+     equalizeHist(channels[0], channels[0]); //equalize histogram on the 1st channel (Y)
+
+     merge(channels,img_hist_equalized); //merge 3 channels including the modified 1st channel into one image
+
+     cvtColor(img_hist_equalized, img_hist_equalized, CV_YCrCb2BGR); //change the color image from YCrCb to BGR format (to display image properly)
+
+*/
+
+
+	Ptr<CLAHE> clahe = createCLAHE();
+	clahe->setClipLimit(2);
+
+
+
+
+     vector<Mat> channels; 
+     Mat img_hist_equalized;
+
+     cvtColor(src, img_hist_equalized, CV_BGR2YCrCb); //change the color image from BGR to YCrCb format
+
+     imshow("ycrcb", src);
+
+     split(img_hist_equalized, channels); //split the image into channels
+
+     clahe->apply(channels[0], channels[0]);     
+
+     merge(channels, img_hist_equalized); //merge 3 channels including the modified 1st channel into one image
+
+     cvtColor(img_hist_equalized, img_hist_equalized, CV_YCrCb2BGR); //change the color image from YCrCb to BGR format (to display image properly)
+
+
+    return img_hist_equalized;
+}
+
+void cam_video::mark_obj(string str, Point p1, Point p2, const Scalar color){
+
+    // Check on bounds
+
+    if (p1.x > 1280)
+       p1.x = 1280;
+
+    if (p1.y > 720)
+       p1.y = 720;
+
+    if (p1.x < 0)
+       p1.x = 0;
+
+    if (p1.y < 0)
+       p1.y = 0;
+
+    if (p2.x > 1280)
+       p1.x = 1280;
+
+    if (p2.y > 720)
+       p2.y = 720;
+
+    if (p2.x < 0)
+       p1.x = 0;
+
+    if (p2.y < 0)
+       p1.y = 0;
+
+    // Draw rectangle on target
+
+    rectangle(ocvMat_, p1, p2, color, 3);
+ 
+    p1.y -= 10;
+
+    if (p1.y < 0)
+       p1.y = 0;
+
+    //Write text above the rectangle
+
+    putText(ocvMat_, str, p1, FONT_HERSHEY_SCRIPT_SIMPLEX, 0.8, color);
+}
+
+Mat cam_video::color_detection(const Mat src, const colors col){
+
+    if (src.dims == 0){
+        cerr << "[WARNING] color_detection(): Empty matrix." << endl;
+        return src;
+    }
+    
+    int iLowH, iHighH;
+    int iLowS, iHighS;
+    int iLowV, iHighV;
+
+    Mat imgHSV, imgTh;
+
+    // Choose your color
+
+    switch(col){
+
+        case BLUE: {
+
+            iLowH = CAM_BLUE_LH;
+            iHighH = CAM_BLUE_HH;
+
+            iLowS = CAM_BLUE_LS;
+            iHighS = CAM_BLUE_HS;
+
+            iLowV = CAM_BLUE_LV;
+            iHighV = CAM_BLUE_HV;
+
+        }break;
+        case RED: {
+
+            iLowH = CAM_RED_LH;
+            iHighH = CAM_RED_HH;
+
+            iLowS = CAM_RED_LS;
+            iHighS = CAM_RED_HS;
+
+            iLowV = CAM_RED_LV;
+            iHighV = CAM_RED_HV;
+
+        }break;
+        default:{ // Green
+
+            iLowH = CAM_GREEN_LH;
+            iHighH = CAM_GREEN_HH;
+
+            iLowS = CAM_GREEN_LS;
+            iHighS = CAM_GREEN_HS;
+
+            iLowV = CAM_GREEN_LV;
+            iHighV = CAM_GREEN_HV;
+        }
+    }
+
+    cvtColor(src, imgHSV, COLOR_BGR2HSV); //Convert the captured frame from BGR to HSV 
+
+    // Search pixel in the range
+    inRange(imgHSV, Scalar(iLowH, iLowS, iLowV), Scalar(iHighH, iHighS, iHighV), imgTh); //Threshold the image
+
+    //morphological opening (remove small objects from the foreground)
+
+    imgTh = morph_operation(imgTh); 
+
+    //morphological closing (fill small holes in the foreground)
+    imgTh = morph_operation(imgTh, true);
+
+
+    return imgTh;
+}
+
+void cam_video::init_kalman(const Point target){
+    
+    KF_ = new KalmanFilter(4, 2, 0);
+
+    // intialization of KF...
+    KF_->transitionMatrix = *(Mat_<float>(4, 4) << 1,0,1,0,   0,1,0,1,  0,0,1,0,  0,0,0,1);
+ 
+    KF_->statePre.at<float>(0) = target.x;
+    KF_->statePre.at<float>(1) = target.y;
+    KF_->statePre.at<float>(2) = 0;
+    KF_->statePre.at<float>(3) = 0;
+
+    setIdentity(KF_->measurementMatrix);
+    setIdentity(KF_->processNoiseCov, Scalar::all(1e-4));
+    setIdentity(KF_->measurementNoiseCov, Scalar::all(10));
+    setIdentity(KF_->errorCovPost, Scalar::all(.1)); 
+}
+
+Point cam_video::kalman(const Point target){
+
+
+    Mat_<float> measurement(2, 1); 
+    measurement.setTo(Scalar(0));
+ 
+    // First predict, to update the internal statePre variable
+    Mat prediction = KF_->predict();              
+
+    // Get mouse point
+    measurement(0) = target.x;
+    measurement(1) = target.y; 
+
+    // The update phase 
+    Mat estimated = KF_->correct(measurement);
+
+    Point statePt(estimated.at<float>(0), estimated.at<float>(1));
+    
+    return statePt;
+}
+
+double cam_video::diff_ms(const timeval t1, const timeval t2)
+{ 
+
+    return ((t1.tv_usec + (t1.tv_sec - t2.tv_sec) * 1000000) - t2.tv_usec) / 1000;
+}

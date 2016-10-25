@@ -1,0 +1,9 @@
+<launch>
+
+	<arg name="yamlFile" default="$(find mark_follower)/conf/config_third_challenge.yaml"/>
+
+    	<rosparam command="load" file="$(arg yamlFile)"/>
+
+	<node name="mark_follower_node" pkg="mark_follower" type="mark_follower_node" respawn="true" output="screen" />
+    
+</launch>

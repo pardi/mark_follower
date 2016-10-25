@@ -1,0 +1,15 @@
+<launch>
+
+	<!-- Load IDS camera node -->
+
+	<include file="$(find ids_viewer)/launch/ids_viewer.launch" />
+
+	<!-- Load recognition node -->
+
+	<arg name="yamlFile" default="$(find mark_follower)/conf/config_first_challenge.yaml"/>
+
+    	<rosparam command="load" file="$(arg yamlFile)"/>
+
+	<node name="mark_follower_node" pkg="mark_follower" type="mark_follower_node" respawn="true" output="screen" />
+    
+</launch>
