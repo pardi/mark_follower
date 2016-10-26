@@ -146,9 +146,9 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 	 //        return ;
 	// while (waitKey(30) == -1) 
 	// 	trial();
-	// spin();
 
 	// --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 
 	// Ros loop
@@ -302,8 +302,6 @@ Mat mark_follower_class::otsuTH(Mat src, bool inv){
 
 void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
  
-	cout << "XXX1_t" << endl;
-
 	// imshow("Not Rotate", dsc.img);
 
 	Mat src = adjust_rotation(dsc);
@@ -348,7 +346,6 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	// cout << MIN_BLOB_SIZE << " " << result_cols * result_rows << endl; 
 	// Check on double dimension of the image and its area
 
-	cout << "XXX2_t" << endl;
 	if (result_rows <= 0 || result_cols <= 0 || result_cols * result_rows < MIN_BLOB_SIZE || result_cols * result_rows > MAX_BLOB_SIZE)
 		return;
 
@@ -368,7 +365,6 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	Point matchLoc;
 
 	minMaxLoc( result, &minVal, &maxVal, &minLoc, &maxLoc, Mat() );
-	cout << "XXX3_t" << endl;
 	// The higher value is the best matching result
 	matchLoc = maxLoc; 
 
@@ -863,10 +859,20 @@ Mat mark_follower_class::remove_field(Mat src){
 
 }
 
+
 void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageConstPtr& msg)
 {
+
+	/// ----------------------------------------------------> Time manager <----------------------------------------------------
+
+    	// Get current time  
+    	gettimeofday(&time_before, NULL);
+
+	/// -------------------------------------------------------------------------------------------------------------------------------------
+
 	try
 	{
+
 
 	 //    	// BEGIN HOUGH TR
 
@@ -902,8 +908,17 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 
 	    // FIRST CHALLENGE WORK
 
+
 		// Get the msg image
 		ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
+
+		// --------------->Pyramids<-------------- 
+		
+		// resize(ocvMat_, src, Size(640, 480), 0, 0, INTER_NEAREST);
+		// resize(ocvMat_, src1, Size(320, 240), 0, 0, INTER_NEAREST);
+
+		// ----------------------------------------------- 
+
 
 		Mat thr;
 
@@ -913,8 +928,8 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 
 		thr = remove_field(ocvMat_);
 
-		// // Show removing field result
-		imshow("Removed Field", thr );
+		// // // Show removing field result
+		// imshow("Removed Field", thr );
 
 		// Morphologic operations
 		thr = morph_operation(thr);
@@ -925,13 +940,13 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 			return;
 		}
 		
-		// Define message to send
+		// // Define message to send
 
-		mark_follower::markPoseStamped msg2pub;
+		// // mark_follower::markPoseStamped msg2pub;
 
-		// Get contours of the blobs
+		// // Get contours of the blobs
 
-		// blob_desc = get_blob(thr);
+		blob_desc = get_blob(thr);
 
 		// // Call matching function on the blob descriptor discovered by get_blob()
 
@@ -979,26 +994,30 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		// markTarget_pub_.publish(msg2pub);
 
 
-		cv::imshow("view", ocvMat_);
-		cv::waitKey(30);
+		// cv::imshow("view", ocvMat_);
+		// cv::waitKey(30);
 	}
 	catch (cv_bridge::Exception& e){
 		ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
 	}
-	
+
+	/// ----------------------------------------------------> Time manager <----------------------------------------------------
+
+	gettimeofday(&time_after, NULL);
+
+	cout << "Time: " << diff_ms(time_after, time_before) << endl;
+
+	/// -------------------------------------------------------------------------------------------------------------------------------------
+
 }
 
 void mark_follower_class::imageThirdChallengeCallback(const sensor_msgs::ImageConstPtr& msg)
 {
 	try
 	{
-		VideoCapture cap = *cap_;
-		cap >> ocvMat_;
 
 		// Get the msg image
-		// ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
-
-
+		ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
 
 		Mat thr, thr_red, thr_black, thr_blue;
 		vector<descriptor> blob_desc;
@@ -1010,18 +1029,10 @@ void mark_follower_class::imageThirdChallengeCallback(const sensor_msgs::ImageCo
 
 		thr_blue = color_detection(ocvMat_, BLUE);
 	
-		// if (!thr_blue.empty())
-		// 	ROS_INFO("Something blue finded");
+		thr_red = color_detection(ocvMat_, RED);
 
-		 thr_red = color_detection(ocvMat_, RED);
+		thr_black = color_detection(ocvMat_, BLACK);
 
-		// if (!thr_red.empty())
-		// 	ROS_INFO("Something red finded");
-
-		 thr_black = color_detection(ocvMat_, BLACK);
-
-		// if (!thr_black.empty())
-		// 	ROS_INFO("Something black finded");
 
 		cv::addWeighted(thr_blue, 1.0, thr_red, 1.0, 0.0, thr);
 		cv::addWeighted(thr, 1.0, thr_black, 1.0, 0.0, thr);
