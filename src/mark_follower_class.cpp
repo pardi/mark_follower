@@ -32,11 +32,8 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 
 	verbose_ = verbose;
 
-	ocvMat_ = Mat(CAMERA_VID_WIDTH, CAMERA_VID_HEIGTH, CV_8UC3);
-
 	// Kalman Filter Init bool vars
 	state_kf_ = false;
-
 
 	// ---------------------------------------------------------------------------------------- >> VIDEO REC << ----------------------------------------------------------------------------------------
 
@@ -53,7 +50,7 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 	// String str = VIDEO_NAME;
 	// str += "_" + number + ".avi";
 
-	// outVid_.open(str.c_str(), ex, 15.0, Size( CAMERA_VID_HEIGTH, CAMERA_VID_WIDTH ), true);
+	// outVid_.open(str.c_str(), ex, 15.0, Size( CAMERA_VID_WIDTH, CAMERA_VID_HEIGHT  ), true);
 
 	// ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -118,6 +115,21 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
     	overrideRCIn_pub_ = n_->advertise<mavros_msgs::OverrideRCIn>("/mavros/rc/override", 10);
 
     	markTarget_pub_ = n_->advertise<mark_follower::markPoseStamped>("/ids_rec/pose", 10);
+
+
+	// Service to get params
+
+	ros::ServiceClient client = n_->serviceClient<ids_viewer::IDSparams>("ids_viewer/params");
+
+	ids_viewer::IDSparams srv;
+
+	if (client.call(srv)){
+
+		width_ = srv.response.width;
+		height_ = srv.response.height;
+
+	}
+
 
 	// ---------------------------------------------------------------------------------------- >> TRIAL << ----------------------------------------------------------------------------------------
 	//    namedWindow("Control", CV_WINDOW_AUTOSIZE); //create a window called "Control"
@@ -496,14 +508,14 @@ vector<descriptor> mark_follower_class::get_blob(const Mat src){
 
 	}
 	
-	// imshow("draw", drawing);
+	imshow("draw", drawing);
 
 	if (challenge_ == FIRST_CHALLENGE){
 
 		for (int i = 0; i < cb.size(); i++){
 			
-			minX = CAMERA_VID_HEIGTH;
-			minY = CAMERA_VID_WIDTH;
+			minX = height_;
+			minY = width_;
 			maxX = 0;
 			maxY = 0;
 
@@ -549,8 +561,8 @@ vector<descriptor> mark_follower_class::get_blob(const Mat src){
 
 		for (int i = 0; i < cb.size(); i++){
 			
-			minX = CAMERA_VID_HEIGTH;
-			minY = CAMERA_VID_WIDTH;
+			minX = height_;
+			minY = width_;
 			maxX = 0;
 			maxY = 0;
 
@@ -671,11 +683,11 @@ void mark_follower_class::mark_obj(string str, Point p1, Point p2, const Scalar 
 
 	// Check on bounds
 
-	if (p1.x > CAMERA_VID_HEIGTH)
-	   p1.x = CAMERA_VID_HEIGTH;
+	if (p1.x > height_)
+	   p1.x = height_;
 
-	if (p1.y > CAMERA_VID_WIDTH)
-	   p1.y = CAMERA_VID_WIDTH;
+	if (p1.y > width_)
+	   p1.y = width_;
 
 	if (p1.x < 0)
 	   p1.x = 0;
@@ -683,11 +695,11 @@ void mark_follower_class::mark_obj(string str, Point p1, Point p2, const Scalar 
 	if (p1.y < 0)
 	   p1.y = 0;
 
-	if (p2.x > CAMERA_VID_HEIGTH)
-	   p1.x = CAMERA_VID_HEIGTH;
+	if (p2.x > height_)
+	   p1.x = height_;
 
-	if (p2.y > CAMERA_VID_WIDTH)
-	   p2.y = CAMERA_VID_WIDTH;
+	if (p2.y > width_)
+	   p2.y = width_;
 
 	if (p2.x < 0)
 	   p1.x = 0;
@@ -846,12 +858,12 @@ Mat mark_follower_class::remove_field(Mat src){
 	// Search pixel in the range
 	inRange(imgHSV, Scalar( CAM_GREEN_LH, CAM_GREEN_LS, CAM_GREEN_LV), Scalar(CAM_GREEN_HH, CAM_GREEN_HS, CAM_GREEN_HV), imgTh); //Threshold the image
 
-	//morphological opening (remove small objects from the foreground)
+	// //morphological opening (remove small objects from the foreground)
 
- 	imgTh = morph_operation(imgTh); 
+ // 	imgTh = morph_operation(imgTh); 
 
-	// //morphological closing (fill small holes in the foreground)
-	imgTh = morph_operation(imgTh, true);
+	// // //morphological closing (fill small holes in the foreground)
+	// imgTh = morph_operation(imgTh, true);
 
 	bitwise_not ( imgTh, imgTh );
 
@@ -905,6 +917,8 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 	 //    imshow( "Detected Lines", color_dst );
 
 	    // END HOUGH TR
+	
+
 
 	    // FIRST CHALLENGE WORK
 
@@ -912,27 +926,28 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		// Get the msg image
 		ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
 
-		// --------------->Pyramids<-------------- 
+		// --------------->Pyramid<-------------- 
+
+		// Half resolution image
+		resize(ocvMat_, ocvMat_lv1_, Size(ocvMat_.cols / 2, ocvMat_.rows / 2), 0, 0, INTER_NEAREST);
+
+		// Quad resolution image
+		resize(ocvMat_, ocvMat_lv2_, Size(ocvMat_.cols / 4, ocvMat_.rows / 4), 0, 0, INTER_NEAREST);
 		
-		// resize(ocvMat_, src, Size(640, 480), 0, 0, INTER_NEAREST);
-		// resize(ocvMat_, src1, Size(320, 240), 0, 0, INTER_NEAREST);
-
 		// ----------------------------------------------- 
-
 
 		Mat thr;
 
 		vector<descriptor> blob_desc;
 	
 		/// Remove field by color
-
 		thr = remove_field(ocvMat_);
 
 		// // // Show removing field result
-		// imshow("Removed Field", thr );
+		imshow("Removed Field", thr );
 
 		// Morphologic operations
-		thr = morph_operation(thr);
+		thr = morph_operation(thr);    
 
 		// When image is empty go to the next frame
 		if (thr.empty()){
@@ -948,7 +963,7 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 
 		blob_desc = get_blob(thr);
 
-		// // Call matching function on the blob descriptor discovered by get_blob()
+		// Call matching function on the blob descriptor discovered by get_blob()
 
 		// for (int i = blob_desc.size(); i--;)
 		// 	t_matching(blob_desc[i], tmpl_);
@@ -995,7 +1010,7 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 
 
 		// cv::imshow("view", ocvMat_);
-		// cv::waitKey(30);
+		cv::waitKey(30);
 	}
 	catch (cv_bridge::Exception& e){
 		ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());

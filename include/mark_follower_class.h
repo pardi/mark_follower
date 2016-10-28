@@ -10,6 +10,7 @@
 #include <mavros_msgs/State.h>
 #include <std_msgs/Float64.h>
 #include <mark_follower/markPoseStamped.h>
+#include <ids_viewer/IDSparams.h>
 // Standard Lib
 #include <wchar.h>
 #include <stdlib.h>
@@ -69,7 +70,7 @@
 #define CAM_BLACK_LV 			0
 #define CAM_BLACK_HV			100
 // GREEN field HSV CHANNEL
-#define CAM_GREEN_LH		0
+#define CAM_GREEN_LH		0 
 #define CAM_GREEN_HH		255
 #define CAM_GREEN_LS		0
 #define CAM_GREEN_HS 		255
@@ -140,7 +141,14 @@ namespace cam_vid {
 
 		bool verbose_;
 
-		cv::Mat ocvMat_;
+		// Camera params
+		int width_, height_;
+
+		// Pyramid frames
+		cv::Mat ocvMat_; // Original image
+		cv::Mat ocvMat_lv1_; // Half image resolution
+		cv::Mat ocvMat_lv2_; // Quad image resolution
+	
 		cv::Mat tmpl_;
 
 		cv::VideoWriter outVid_;
