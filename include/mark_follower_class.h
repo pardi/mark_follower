@@ -29,9 +29,8 @@
 #include <enum_header.h>
 #include <KDTreeDescObj.h>
 
-
 #define CAMERA_VID_WIDTH 	1280 
-#define CAMERA_VID_HEIGTH 	720
+#define CAMERA_VID_HEIGHT 	720
 #define CAMERA_VID_BPP 		24
 
 // WHITE HSV CHANNEL
@@ -63,12 +62,12 @@
 #define CAM_RED_LV 			55
 #define CAM_RED_HV			253
 // BLACK HSV CHANNEL
-#define CAM_BLACK_LH			0
-#define CAM_BLACK_HH			0
-#define CAM_BLACK_LS				0
-#define CAM_BLACK_HS	 		0
-#define CAM_BLACK_LV 			0
-#define CAM_BLACK_HV			100
+#define CAM_BLACK_LH		0
+#define CAM_BLACK_HH		0
+#define CAM_BLACK_LS			0
+#define CAM_BLACK_HS	 	0
+#define CAM_BLACK_LV 		0
+#define CAM_BLACK_HV		100
 // GREEN field HSV CHANNEL
 #define CAM_GREEN_LH		0 
 #define CAM_GREEN_HH		255
@@ -82,7 +81,7 @@
 
 
 #define MAX_BLOB_SIZE		1000000
-#define MIN_BLOB_SIZE		((altitude_ > 22.5)?1000:(altitude_ > 17.5)?2500:(altitude_ > 12.5)?3500:(altitude_ > 7.5)?6500:(altitude_ > 5)?20000:(altitude_ > 3.5)?42000:(altitude_ > 2.5)?90000:150000)
+#define MIN_BLOB_SIZE		200//((altitude_ > 22.5)?1000:(altitude_ > 17.5)?2500:(altitude_ > 12.5)?3500:(altitude_ > 7.5)?6500:(altitude_ > 5)?20000:(altitude_ > 3.5)?42000:(altitude_ > 2.5)?90000:150000)
    
 				
 #define RAD2DEG				(180.0 / M_PI)
@@ -129,8 +128,8 @@ namespace cam_vid {
 		// Further functions
 
 		float approx_perpendicular(double, double);
-		void find_best_perpendicular_match(vector<double>);
-		void sameQ(vector<double> &, vector<double>&);
+		std::vector<cv::Point> getIntersection(std::vector<Vec4i>);
+		cv::Point searchNPG(std::vector<Point>);
 
 		double diff_ms(const timeval, const timeval);
 

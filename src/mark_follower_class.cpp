@@ -76,7 +76,7 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 
 	// Load template for the first challenge
 	if (challenge_ == FIRST_CHALLENGE)
-		tmpl_ = imread("../img/template.jpg", CV_LOAD_IMAGE_COLOR );
+		tmpl_ = imread("/home/solaris/catkin_ws/src/mark_follower/img/template.jpg", CV_LOAD_IMAGE_COLOR );
 	
 	// >> Subscribers <<
 
@@ -128,6 +128,9 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 		width_ = srv.response.width;
 		height_ = srv.response.height;
 
+	}else{
+		width_ = CAMERA_VID_WIDTH;
+		height_ = CAMERA_VID_HEIGHT;		
 	}
 
 
@@ -160,8 +163,6 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 	// 	trial();
 
 	// --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
 
 	// Ros loop
 
@@ -199,105 +200,6 @@ float mark_follower_class::approx_perpendicular(double m1, double m2){
 
 	return -1.0 - (m1 * m2);
 }
-
-void mark_follower_class::find_best_perpendicular_match(vector<double> m){
-
-	double best = 1000;
-	int idx = 0;
-
-	Mat match = Mat::zeros(m.size(), m.size(), CV_8UC1);
-
-	for (int j = 0; j < m.size(); j++)
-		for (int i = 0; i < m.size(); i++){
-			match.at<double>(i,j) = approx_perpendicular(m[j], m[i]);
-			// cout << match.at<double>(i,j) << " " << approx_perpendicular(m[j], m[i]) << endl;
-		}
-
-	// cout << match << endl;
-
-	for (int j = 0; j < m.size(); j++){
-
-		for (int i = 0; i < m.size(); i++){
-			if (match.at<double>(i, j) < best){
-				best = match.at<double>(i, j);
-				idx = i;
-			}
-		}
-		if (best != 1000)
-			// cout << match.at<double>(idx, j) << " " << j << " " << idx << endl;
-
-		best = 1000;
-		idx = 0;
-	}
-
-
-}
-
-void mark_follower_class::sameQ(vector<double> &m, vector<double>& q){
-
-	vector<double> m_buf;
-	vector<double> q_buf;
-	vector<int> idx;
-
-	bool nearest = true;
-
-	while(nearest){
-
-		nearest = false;
-
-		double M = m[0];
-		double Q = q[0];
-
-		idx.push_back(0);
-
-		for (int i = 1; i < m.size(); i++){
-
-		   if (fabs(M - m[i]) < .5){
-				if (fabs(Q - q[i]) < 50){
-					nearest = true;
-					idx.push_back(i);
-				}
-				else{
-					m_buf.push_back(m[i]);
-					q_buf.push_back(q[i]);
-				}
-			}
-			else{
-					m_buf.push_back(m[i]);
-					q_buf.push_back(q[i]);
-			}
-		}
-
-		double sum = 0;
-		
-		for (int i = 0; i < idx.size(); i++)
-			sum += q[idx[i]];
-
-		sum /= idx.size();
-
-		m_buf.push_back(M);
-		q_buf.push_back(sum);
-
-
-		// cout << "bufS" << m_buf.size() << " " << sum << endl;
-
-		// for (int i = 0; i < q_buf.size(); ++i)
-		//     cout << q_buf[i] << " ";
-
-		// cout << endl;
-
-		if (nearest == true){
-			m = m_buf;
-			q = q_buf;
-		}
-
-
-		m_buf.clear();
-		q_buf.clear();
-		idx.clear();
-	}
-}
-
 
 Mat mark_follower_class::otsuTH(Mat src, bool inv){
 
@@ -345,7 +247,6 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	Mat newTemplate;
 
 	// Resize template
-
 	resize(tmpl, newTemplate, Size((int) (coef_resize), (int)(coef_resize)));
 
 	tmpl = newTemplate;
@@ -354,14 +255,15 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	int result_cols = src.cols + 1;
 	int result_rows = src.rows + 1;
 	
-	//cout << result_cols << " " << result_rows << " " << result_cols * result_rows <<endl;
+	// cout << result_cols << " " << result_rows << " " << result_cols * result_rows <<endl;
 	// cout << MIN_BLOB_SIZE << " " << result_cols * result_rows << endl; 
 	// Check on double dimension of the image and its area
 
 	if (result_rows <= 0 || result_cols <= 0 || result_cols * result_rows < MIN_BLOB_SIZE || result_cols * result_rows > MAX_BLOB_SIZE)
 		return;
 
-
+	cout << "XXX1" << endl;
+	
 	// Allocate new dimensions
 	result.create( result_rows, result_cols, CV_32FC1 );
 
@@ -431,7 +333,6 @@ vector<descriptor> mark_follower_class::get_blob(const Mat src){
 
 		approxPolyDP(contours[i], contours[i], epsilon, true);
 
-		
 		// Save contours only if area is bigger the 50 and the section has 4 vertex
 		// cout << "area " << area << " "<< contours[i].size() << endl;
 
@@ -614,48 +515,54 @@ vector<descriptor> mark_follower_class::get_blob(const Mat src){
 
 Mat mark_follower_class::morph_operation(Mat src, const bool inv){
 
-	int dilate_iter;
+	erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 
-	if (challenge_ == FIRST_CHALLENGE){
-
-		if (inv){
-
-			if (altitude_ > 17.5 )
-				dilate_iter = 2;
-			else
-				if (altitude_ > 12.5 )
-					dilate_iter = 4;	
-				else
-					if (altitude_ > 7.5 )
-						dilate_iter = 6;
-					else
-						dilate_iter = 8;
+	return src;
 
 
-			for (int i = 0; i <  dilate_iter; ++i)
-				dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// int dilate_iter;
+
+	// if (challenge_ == FIRST_CHALLENGE){
+
+	// 	if (inv){
+
+	// 		if (altitude_ > 17.5 )
+	// 			dilate_iter = 2;
+	// 		else
+	// 			if (altitude_ > 12.5 )
+	// 				dilate_iter = 4;	
+	// 			else
+	// 				if (altitude_ > 7.5 )
+	// 					dilate_iter = 6;
+	// 				else
+	// 					dilate_iter = 8;
+
+
+	// 		for (int i = 0; i <  dilate_iter; ++i)
+	// 			dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 			
-			erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-			erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-			erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		}
-		else{
-			erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-			dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 		erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 		erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 		erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 	}
+	// 	else{
+	// 		erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 		dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 
-		}
-	}
-	else{
-		if (inv){
-			// External
-			erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-			dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		}else{
-			// Internal
-			dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-			erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		}
-	}
+	// 	}
+	// }
+	// else{
+	// 	if (inv){
+	// 		// External
+	// 		erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 		dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 	}else{
+	// 		// Internal
+	// 		dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 		erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// 	}
+	// }
 	return src;
 }
 
@@ -856,11 +763,11 @@ Mat mark_follower_class::remove_field(Mat src){
 	cvtColor(src, imgHSV, COLOR_BGR2HSV); //Convert the captured frame from BGR to HSV 
 
 	// Search pixel in the range
-	inRange(imgHSV, Scalar( CAM_GREEN_LH, CAM_GREEN_LS, CAM_GREEN_LV), Scalar(CAM_GREEN_HH, CAM_GREEN_HS, CAM_GREEN_HV), imgTh); //Threshold the image
+	inRange(imgHSV, Scalar( CAM_GREEN_LH, CAM_GREEN_LS, CAM_GREEN_LV), Scalar(CAM_GREEN_HH, CAM_GREEN_HS, CAM_GREEN_HV), imgTh); 
 
-	// //morphological opening (remove small objects from the foreground)
+	// //morphological opening (remove small objects from the foreground)`
 
- // 	imgTh = morph_operation(imgTh); 
+ 	// 	imgTh = morph_operation(imgTh); 
 
 	// // //morphological closing (fill small holes in the foreground)
 	// imgTh = morph_operation(imgTh, true);
@@ -885,75 +792,95 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 	try
 	{
 
-
-	 //    	// BEGIN HOUGH TR
-
-	 //    	Mat src, dst, color_dst;
-		
-		// src = ocvMat_;
-
-	 //    	Canny( src, dst, 50, 200, 3 );
-	 //    	cvtColor( dst, color_dst, CV_GRAY2BGR );
-
-
-	 //    vector<Vec4i> lines;
-
-	 //    HoughLinesP( dst, lines, 1, CV_PI / 180, 80, 40, 10 );
-	 
-	 //    cout << lines.size() << endl;
-
-	 //    std::vector<double> m, q;
-
-	 //    for( size_t i = 0; i < lines.size(); i++ )
-	 //    {
-	 //        	line( color_dst, Point(lines[i][0], lines[i][1]),
-	 //           Point(lines[i][2], lines[i][3]), Scalar(0,0,255), 3, 8 );
-	 //    }
-
-	 //    namedWindow( "Source", 1 );
-	 //    imshow( "Source", src );
-
-	 //    namedWindow( "Detected Lines", 1 );
-	 //    imshow( "Detected Lines", color_dst );
-
-	    // END HOUGH TR
-	
-
-
-	    // FIRST CHALLENGE WORK
-
-
 		// Get the msg image
 		ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
 
-		// --------------->Pyramid<-------------- 
-
-		// Half resolution image
 		resize(ocvMat_, ocvMat_lv1_, Size(ocvMat_.cols / 2, ocvMat_.rows / 2), 0, 0, INTER_NEAREST);
+		resize(ocvMat_, ocvMat_lv2_, Size(ocvMat_.cols / 2, ocvMat_.rows / 2), 0, 0, INTER_NEAREST);
 
-		// Quad resolution image
-		resize(ocvMat_, ocvMat_lv2_, Size(ocvMat_.cols / 4, ocvMat_.rows / 4), 0, 0, INTER_NEAREST);
-		
-		// ----------------------------------------------- 
+		double w1 = 1, w2 = 0;
 
 		Mat thr;
 
-		vector<descriptor> blob_desc;
-	
 		/// Remove field by color
-		thr = remove_field(ocvMat_);
+		thr = remove_field(ocvMat_lv2_);
 
-		// // // Show removing field result
-		imshow("Removed Field", thr );
+//	    	BEGIN HOUGH TR
 
-		// Morphologic operations
-		thr = morph_operation(thr);    
+	    	Mat src, dst, color_dst;
+		
+		src = thr;
 
-		// When image is empty go to the next frame
-		if (thr.empty()){
-			ROS_INFO("Empty after the morphological operations");
-			return;
+	    	Canny( src, dst, 50, 200, 3 );
+
+	      vector<Vec4i> lines;
+
+	      HoughLinesP( dst, lines, 1, CV_PI / 180, 80, 40, 20 );
+	 	
+	      color_dst = ocvMat_lv2_;
+
+		std::vector<Point> pointIntersectV;
+
+		// Intersect Point
+		Point IP; 
+
+		pointIntersectV = getIntersection(lines);
+
+		IP =searchNPG(pointIntersectV);
+
+		if (IP.x == -1 || IP.y == -1){
+			w2 = 0;
+			w1 = 1;
 		}
+		else{
+			for( size_t i = 0; i < pointIntersectV.size(); i++ )
+				circle( color_dst, pointIntersectV[i], 2, Scalar(150, 255, 100), 3, 16);
+
+
+			circle( color_dst, IP, 2, Scalar(255, 150, 100), 3, 16);	
+		
+			imshow( "Detected Lines", color_dst );
+
+		}
+		
+	     // END HOUGH TR
+	
+	 //     // FIRST CHALLENGE WORK
+
+		// // Get the msg image
+		// ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
+
+		// // --------------->Pyramid<-------------- 
+
+		// // Half resolution image
+		// resize(ocvMat_, ocvMat_lv1_, Size(ocvMat_.cols / 2, ocvMat_.rows / 2), 0, 0, INTER_NEAREST);
+
+		// // Quad resolution image
+		// resize(ocvMat_, ocvMat_lv2_, Size(ocvMat_.cols / 4, ocvMat_.rows / 4), 0, 0, INTER_NEAREST);
+		
+		// // ----------------------------------------------- 
+
+		// // cout << "XXX1" << endl;
+		// Mat thr;
+
+		// vector<descriptor> blob_desc;
+	
+		// /// Remove field by color
+		// thr = remove_field(ocvMat_lv2_);
+
+		// // Show removing field result
+		// imshow("Removed Field", thr );
+
+		// // Morphologic operations
+		// thr = morph_operation(thr); 
+
+		// imshow("Morphologic", thr );
+
+		// // When image is empty go to the next frame
+		// if (thr.empty()){
+		// 	ROS_INFO("Empty after the morphological operations");
+		// 	return;
+		// }
 		
 		// // Define message to send
 
@@ -961,14 +888,14 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 
 		// // Get contours of the blobs
 
-		blob_desc = get_blob(thr);
+		// blob_desc = get_blob(thr);
 
-		// Call matching function on the blob descriptor discovered by get_blob()
+		// // Call matching function on the blob descriptor discovered by get_blob()
 
 		// for (int i = blob_desc.size(); i--;)
 		// 	t_matching(blob_desc[i], tmpl_);
 
-		// // Find out the best match
+		// // Find out the best mtch
 		// if (!sl.empty()){
 		// 	target_ = sl.get_max();
 		// 	// Clear list
@@ -996,17 +923,17 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		// 		refVariance_ = 0;
 		// }
 
-		// Populate message
+		// // Populate message
 
-		// msg2pub.stamp = ros::Time::now();
+		// // msg2pub.stamp = ros::Time::now();
 		
-		// msg2pub.x = target_.x;
-		// msg2pub.y = target_.y;
+		// // msg2pub.x = target_.x;
+		// // msg2pub.y = target_.y;
 
-		// msg2pub.budgetResidual = budgetResidual_;
-		// msg2pub.variance = refVariance_;
+		// // msg2pub.budgetResidual = budgetResidual_;
+		// // msg2pub.variance = refVariance_;
 
-		// markTarget_pub_.publish(msg2pub);
+		// // markTarget_pub_.publish(msg2pub);
 
 
 		// cv::imshow("view", ocvMat_);
@@ -1249,3 +1176,67 @@ void mark_follower_class::altitudeCallback(const std_msgs::Float64Ptr &msg)
 // 	}
 	
 // }
+
+std::vector<Point> mark_follower_class::getIntersection(std::vector<Vec4i> lines){
+		
+	std::vector<double> m, q;
+	double tmp_m, tmp_q;
+
+	// Get m and q of lines
+	for (int i = lines.size(); i--;){
+
+		tmp_m = (double) (lines[i][1] - lines[i][3]) / (lines[i][0] - lines[i][2]);
+		m.push_back( tmp_m );
+		
+		tmp_q = lines[i][3] - tmp_m * lines[i][2];
+		q.push_back(tmp_q);
+	}
+
+	double perpendicular_coeff;
+	std::vector<Point> crossV;
+	Point crossP;
+
+	// Search perpendicular and takes the cross point
+
+	for (int i = m.size(); i--;)
+		for (int j = m.size() - 1; j--;){
+			
+			perpendicular_coeff = approx_perpendicular(m[i], m[j]);
+
+			if (perpendicular_coeff < 0.01 && (perpendicular_coeff > -0.01)){
+
+				crossP.x = (q[j] - q[i]) / (m[i] - m[j]);
+				crossP.y = m[i]* crossP.x + q[i];
+
+				crossV.push_back(crossP);
+
+			}
+		}
+	
+	return crossV;
+}
+
+Point mark_follower_class::searchNPG(std::vector<Point> IPVec){
+
+	for (int i = IPVec.size(); i--;){
+		int count = 0;
+		Point IPmean = IPVec[i];
+		for (int j = IPVec.size() - 1; j--;){
+
+			double d = sqrt(pow(IPVec[i].x - IPVec[j].x, 2) + pow(IPVec[i].y - IPVec[j].y, 2));
+
+			if (d < 5){
+				IPmean.x += IPVec[j].x;
+				IPmean.y += IPVec[j].y;
+				count++;
+			}
+		}
+		if (count == 3){
+			IPmean.x /= 4;
+			IPmean.y /= 4;
+			return IPmean ;
+		}
+	}
+
+	return Point(-1,-1);
+}
