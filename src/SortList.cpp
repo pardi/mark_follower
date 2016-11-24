@@ -63,11 +63,17 @@ void SortList::push(const cv::Point target, const double value){
 // Search max element
 cv::Point SortList::get_max(){
 
+	if (empty())
+		return cv::Point(-1, -1);
+
 	return first_node_->target_;
 }
 
 // Search min element
 cv::Point SortList::get_min(){
+
+	if (empty())
+		return cv::Point(-1, -1);
 
 	// Pointer
 	NodeSL* p = first_node_;
@@ -93,6 +99,9 @@ void SortList::clear(){
 	NodeSL* p = first_node_;
 	// Last Pointer
 	NodeSL* pl = first_node_;
+
+	if (empty())
+		return;
 
 	while(p->next_ != NULL){
 		pl = p;

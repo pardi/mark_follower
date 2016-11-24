@@ -133,6 +133,11 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 		height_ = CAMERA_VID_HEIGHT;		
 	}
 
+	// ----------------------------------------------------------------------------------------- >> FPV << -----------------------------------------------------------------------------------------
+
+	// Generate image transport element
+  	image_transport::ImageTransport it_IA(*n_);
+  	image_aug_pub_ = it_IA.advertise("mark_follower/image_aug", 1);
 
 	// ---------------------------------------------------------------------------------------- >> TRIAL << ----------------------------------------------------------------------------------------
 	//    namedWindow("Control", CV_WINDOW_AUTOSIZE); //create a window called "Control"
@@ -261,8 +266,6 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 
 	if (result_rows <= 0 || result_cols <= 0 || result_cols * result_rows < MIN_BLOB_SIZE || result_cols * result_rows > MAX_BLOB_SIZE)
 		return;
-
-	cout << "XXX1" << endl;
 	
 	// Allocate new dimensions
 	result.create( result_rows, result_cols, CV_32FC1 );
@@ -301,7 +304,7 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	Point fdsc(dsc.origin.x + dsc.img.cols, dsc.origin.y + dsc.img.rows);
 
 	// Draw square around the blob
-	mark_obj("hit", dsc.origin, fdsc, Scalar(0, 0, 255));
+	// mark_obj("hit", dsc.origin, fdsc, Scalar(0, 0, 255));
 
 }
 	
@@ -409,7 +412,7 @@ vector<descriptor> mark_follower_class::get_blob(const Mat src){
 
 	}
 	
-	imshow("draw", drawing);
+	// imshow("draw", drawing);
 
 	if (challenge_ == FIRST_CHALLENGE){
 
@@ -795,15 +798,20 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		// Get the msg image
 		ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
 
-		resize(ocvMat_, ocvMat_lv1_, Size(ocvMat_.cols / 2, ocvMat_.rows / 2), 0, 0, INTER_NEAREST);
-		resize(ocvMat_, ocvMat_lv2_, Size(ocvMat_.cols / 2, ocvMat_.rows / 2), 0, 0, INTER_NEAREST);
+		// --------------->Pyramid<-------------- 
 
-		double w1 = 1, w2 = 0;
+		// Half resolution image
+		resize(ocvMat_, ocvMat_lv1_, Size(ocvMat_.cols / 2, ocvMat_.rows / 2), 0, 0, INTER_NEAREST);
+
+		// Quad resolution image
+		resize(ocvMat_, ocvMat_lv2_, Size(ocvMat_.cols / 4, ocvMat_.rows / 4), 0, 0, INTER_NEAREST);
+		
+		// ----------------------------------------------- 
 
 		Mat thr;
 
 		/// Remove field by color
-		thr = remove_field(ocvMat_lv2_);
+		thr = remove_field(ocvMat_lv1_);
 
 //	    	BEGIN HOUGH TR
 
@@ -822,32 +830,30 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		std::vector<Point> pointIntersectV;
 
 		// Intersect Point
-		Point IP; 
+		Point T_Intersect; 
 
 		pointIntersectV = getIntersection(lines);
 
-		IP =searchNPG(pointIntersectV);
+		T_Intersect = searchNPG(pointIntersectV);
 
-		if (IP.x == -1 || IP.y == -1){
-			w2 = 0;
-			w1 = 1;
-		}
-		else{
+		if ((T_Intersect.x != -1) && (T_Intersect.y == -1)){
+
 			for( size_t i = 0; i < pointIntersectV.size(); i++ )
 				circle( color_dst, pointIntersectV[i], 2, Scalar(150, 255, 100), 3, 16);
 
-
-			circle( color_dst, IP, 2, Scalar(255, 150, 100), 3, 16);	
-		
-			imshow( "Detected Lines", color_dst );
-
+			// Plot target Intersect 
+			circle( color_dst, T_Intersect, 2, Scalar(255, 150, 100), 3, 16);	
 		}
+	
+		// imshow( "Detected Lines", color_dst );
+
+		// }
 		
 	     // END HOUGH TR
 	
-	 //     // FIRST CHALLENGE WORK
+	     // FIRST CHALLENGE WORK
 
-		// // Get the msg image
+		// Get the msg image
 		// ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
 
 		// // --------------->Pyramid<-------------- 
@@ -860,84 +866,125 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		
 		// // ----------------------------------------------- 
 
-		// // cout << "XXX1" << endl;
 		// Mat thr;
 
-		// vector<descriptor> blob_desc;
+		vector<descriptor> blob_desc;
 	
-		// /// Remove field by color
-		// thr = remove_field(ocvMat_lv2_);
+		/// Remove field by color
+		// thr = remove_field(ocvMat_lv1_);
 
-		// // Show removing field result
+		// Show removing field result
 		// imshow("Removed Field", thr );
 
-		// // Morphologic operations
-		// thr = morph_operation(thr); 
+		// Morphologic operations
+		thr = morph_operation(thr); 
 
 		// imshow("Morphologic", thr );
 
-		// // When image is empty go to the next frame
-		// if (thr.empty()){
-		// 	ROS_INFO("Empty after the morphological operations");
-		// 	return;
-		// }
+		// When image is empty go to the next frame
+		if (thr.empty()){
+			ROS_INFO("Empty after the morphological operations");
+			return;
+		}
 		
-		// // Define message to send
+		// Define message to send
 
-		// // mark_follower::markPoseStamped msg2pub;
+		mark_follower::markPoseStamped msg2pub;
 
-		// // Get contours of the blobs
+		// Get contours of the blobs
 
-		// blob_desc = get_blob(thr);
+		blob_desc = get_blob(thr);
 
-		// // Call matching function on the blob descriptor discovered by get_blob()
+		// Call matching function on the blob descriptor discovered by get_blob()
 
-		// for (int i = blob_desc.size(); i--;)
-		// 	t_matching(blob_desc[i], tmpl_);
+		for (int i = blob_desc.size(); i--;)
+			t_matching(blob_desc[i], tmpl_);
 
-		// // Find out the best mtch
-		// if (!sl.empty()){
-		// 	target_ = sl.get_max();
-		// 	// Clear list
-		// 	sl.clear();
+		// Find out the best match
+
+		// Take target from matching
+		Point T_matching = sl.get_max();
+
+		// // Clear sorted list
+		sl.clear();
+
+		// No target found
+
+		if (( (T_Intersect.x == -1) && (T_Intersect.y == -1)) && ( (T_matching.x == -1) && (T_matching.y == -1))){
+			budgetResidual_--;
+
+			if (budgetResidual_ < 0)
+				refVariance_ = 0;
+		} 
+		else{
+	
+			double w1 = 0, w2 = 0;
+
+			// One target found at least
+			// Modulate weight
+
+			if (( (T_Intersect.x != -1) && (T_Intersect.y != -1)) && ( (T_matching.x != -1) && (T_matching.y != -1))){
+
+				w1 = (altitude_ - 1 ) / 2.5;
+
+				if (w1 > 1.0)
+					w1 = 1.0;
+				else 
+					if (w1 < 0.0)
+						w1 = 0.0;
+
+			} else {
+
+				if ((T_Intersect.x != -1) && (T_Intersect.y != -1))
+					w1 = 0;
+				else
+					if ((T_matching.x != -1) && (T_matching.y != -1))
+						w1 = 1;
+			}
+
+			w2 = 1 - w1;			
+
+			//  Weighted sum
+			target_.x = 2 * (T_matching.x * w1 + T_Intersect.x * w2);
+			target_.y = 2 * (T_matching.y * w1 + T_Intersect.y * w2);
+
+			// Kalman Filter 
+			if (!state_kf_){
+				init_kalman(target_);
+				state_kf_ = true;
+			}
+			else
+				target_ = kalman(target_);  
 			
-		// 	// Kalman Filter 
-		// 	if (!state_kf_){
-		// 		init_kalman(target_);
-		// 		state_kf_ = true;
-		// 	}
-		// 	else
-		// 		target_ = kalman(target_);  
-			
-		// 	// Draw point
-		// 	circle( ocvMat_, target_, 2, Scalar(255, 0, 0), 3, 16);
+			// Draw point
+			circle( ocvMat_, target_, 2, Scalar(255, 0, 0), 3, 16);
 
-		// 	budgetResidual_ = 10;
+			budgetResidual_ = 10;
 
-		// 	refVariance_++;
+			refVariance_++;
 
-		// }else {
-		// 	budgetResidual_--;
+		}
+ 
+		// Populate message
 
-		// 	if (budgetResidual_ < 0)
-		// 		refVariance_ = 0;
-		// }
-
-		// // Populate message
-
-		// // msg2pub.stamp = ros::Time::now();
+		msg2pub.stamp = ros::Time::now();
 		
-		// // msg2pub.x = target_.x;
-		// // msg2pub.y = target_.y;
+		msg2pub.x = target_.x;
+		msg2pub.y = target_.y;
 
-		// // msg2pub.budgetResidual = budgetResidual_;
-		// // msg2pub.variance = refVariance_;
+		msg2pub.budgetResidual = budgetResidual_;
+		msg2pub.variance = refVariance_;
 
-		// // markTarget_pub_.publish(msg2pub);
+		markTarget_pub_.publish(msg2pub);
 
+		// Publish augmentated image
+		sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", ocvMat_).toImageMsg();
+
+		// Publish the message
+		image_aug_pub_.publish(msg); 
 
 		// cv::imshow("view", ocvMat_);
-		cv::waitKey(30);
+		// cv::waitKey(30);
 	}
 	catch (cv_bridge::Exception& e){
 		ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
@@ -1077,8 +1124,8 @@ void mark_follower_class::imageThirdChallengeCallback(const sensor_msgs::ImageCo
 		// markTarget_pub_.publish(msg2pub);
 
 
-		cv::imshow("view", ocvMat_);
-		cv::waitKey(30);
+		// cv::imshow("view", ocvMat_);
+		// cv::waitKey(30);
 	}
 	catch (cv_bridge::Exception& e){
 		ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());

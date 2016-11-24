@@ -144,6 +144,7 @@ namespace cam_vid {
 		int width_, height_;
 
 		// Pyramid frames
+
 		cv::Mat ocvMat_; // Original image
 		cv::Mat ocvMat_lv1_; // Half image resolution
 		cv::Mat ocvMat_lv2_; // Quad image resolution
@@ -165,6 +166,9 @@ namespace cam_vid {
 		// Ros node
 
 		ros::NodeHandle* n_;
+
+		// FPV publisher
+		image_transport::Publisher image_aug_pub_;
 
 		// ROS SITL operations
 		image_transport::Subscriber image_tr_sub_;
