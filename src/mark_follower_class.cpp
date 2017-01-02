@@ -136,8 +136,8 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 	// ----------------------------------------------------------------------------------------- >> FPV << -----------------------------------------------------------------------------------------
 
 	// Generate image transport element
-  	image_transport::ImageTransport it_IA(*n_);
-  	image_aug_pub_ = it_IA.advertise("mark_follower/image_aug", 1);
+  	// image_transport::ImageTransport it_IA(*n_);
+  	// image_aug_pub_ = it_IA.advertise("mark_follower/image_aug", 1);
 
 	// ---------------------------------------------------------------------------------------- >> TRIAL << ----------------------------------------------------------------------------------------
 	//    namedWindow("Control", CV_WINDOW_AUTOSIZE); //create a window called "Control"
@@ -517,9 +517,34 @@ vector<descriptor> mark_follower_class::get_blob(const Mat src){
 
 
 Mat mark_follower_class::morph_operation(Mat src, const bool inv){
+ 
+	// erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	// dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 
-	erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-	dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	int dilate_iter;
+
+	if (altitude_ > 17.5 )
+		dilate_iter = 1;
+	else
+		if (altitude_ > 12.5 )
+			dilate_iter = 1;	
+		else
+			if (altitude_ > 7.5 )
+				dilate_iter = 1;
+			else
+				if (altitude_ > 4.5 )
+					dilate_iter = 3;
+				else
+					dilate_iter = 4;
+
+
+
+	for (int i = 0; i <  dilate_iter; ++i)
+		erode(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+	
+	for (int i = 0; i <  dilate_iter; ++i)
+		dilate(src, src, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
+
 
 	return src;
 
@@ -798,6 +823,7 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		// Get the msg image
 		ocvMat_ = cv_bridge::toCvShare(msg, "bgr8")->image;
 
+
 		// --------------->Pyramid<-------------- 
 
 		// Half resolution image
@@ -845,9 +871,9 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 			circle( color_dst, T_Intersect, 2, Scalar(255, 150, 100), 3, 16);	
 		}
 	
-		// imshow( "Detected Lines", color_dst );
+		imshow( "Detected Lines", color_dst );
 
-		// }
+		
 		
 	     // END HOUGH TR
 	
@@ -879,7 +905,7 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		// Morphologic operations
 		thr = morph_operation(thr); 
 
-		// imshow("Morphologic", thr );
+		imshow("Morphologic", thr );
 
 		// When image is empty go to the next frame
 		if (thr.empty()){
@@ -978,13 +1004,13 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		markTarget_pub_.publish(msg2pub);
 
 		// Publish augmentated image
-		sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", ocvMat_).toImageMsg();
+		// sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", ocvMat_).toImageMsg();
 
 		// Publish the message
-		image_aug_pub_.publish(msg); 
+		// image_aug_pub_.publish(msg);
 
-		// cv::imshow("view", ocvMat_);
-		// cv::waitKey(30);
+		cv::imshow("view", ocvMat_);
+		cv::waitKey(30);
 	}
 	catch (cv_bridge::Exception& e){
 		ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
@@ -1031,7 +1057,7 @@ void mark_follower_class::imageThirdChallengeCallback(const sensor_msgs::ImageCo
 		thr = morph_operation(thr);
 
 		// Show removing field result
-		imshow("Removed Field", thr );
+		// imshow("Removed Field", thr );
 
 		// When image is empty go to the next frame
 		if (thr.empty()){
