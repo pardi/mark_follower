@@ -26,6 +26,7 @@ struct descriptor{
 	double alpha;
 	shapes shape;
 	colors color;
+	bool is_square;
 };
 
 #endif

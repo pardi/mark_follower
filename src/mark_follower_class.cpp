@@ -114,7 +114,7 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 
     	overrideRCIn_pub_ = n_->advertise<mavros_msgs::OverrideRCIn>("/mavros/rc/override", 10);
 
-    	markTarget_pub_ = n_->advertise<mark_follower::markPoseStamped>("/ids_rec/pose", 10);
+    	markTarget_pub_ = n_->advertise<mark_follower::markPoseStamped>("/mark_follower/target_pose", 10);
 
 
 	// Service to get params
@@ -247,8 +247,6 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	else
 		coef_resize = src.cols;
 	
-	cout << coef_resize << endl;
-
 	Mat newTemplate;
 
 	// Resize template
@@ -298,7 +296,7 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	matchLoc.y = dsc.origin.y + maxLoc.y + tmpl.rows / 2;
 
 	// Push point the sorted list
-	sl.push(matchLoc, maxVal);
+	sl.push(matchLoc, maxVal, dsc.is_square);
 
 	// Create point with custom dimensions
 	Point fdsc(dsc.origin.x + dsc.img.cols, dsc.origin.y + dsc.img.rows);
@@ -306,6 +304,122 @@ void mark_follower_class::t_matching(descriptor dsc, Mat tmpl){
 	// Draw square around the blob
 	// mark_obj("hit", dsc.origin, fdsc, Scalar(0, 0, 255));
 
+}
+
+vector<descriptor> mark_follower_class::get_blobFirstCh(const Mat src){
+	
+	vector<vector<Point> > contours, cb;
+	vector<Vec4i> hierarchy;
+
+	float epsilon, area;
+	int minX, minY;
+	int maxX, maxY;
+
+	Mat drawing = Mat::zeros( src.size(), CV_8UC3 );
+
+	Mat blob;
+	descriptor bd;
+	vector<descriptor> blob_descriptor;
+	vector<shapes> shape_dir;
+	vector<bool> is_square;
+
+	// Find contours
+	findContours(src, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+
+	// Check out contours appling a 5% approximation on the area
+	for (int i = 0; i < contours.size(); ++i){
+		area = arcLength(contours[i], true);
+
+		epsilon = 0.05 * area;
+
+		approxPolyDP(contours[i], contours[i], epsilon, true);
+
+		// Save contours only if area is bigger the 50 and the section has 4 vertex
+		// cout << "area " << area << " "<< contours[i].size() << endl;
+
+		if (contours[i].size() == 4 && area > 15){ // 100 
+
+			double d1, d2, d3, d4, diag1, diag2;
+			double P;
+
+			d1 = sqrt((pow(contours[i][0].x - contours[i][1].x, 2)) +  (pow(contours[i][0].y - contours[i][1].y, 2)) );
+			d2 = sqrt((pow(contours[i][1].x - contours[i][2].x, 2)) +  (pow(contours[i][1].y - contours[i][2].y, 2)) );
+			d3 = sqrt((pow(contours[i][2].x - contours[i][3].x, 2)) +  (pow(contours[i][2].y - contours[i][3].y, 2)) );
+			d4 = sqrt((pow(contours[i][3].x - contours[i][0].x, 2)) +  (pow(contours[i][3].y - contours[i][0].y, 2)) );
+
+			diag1 = sqrt((pow(contours[i][0].x - contours[i][2].x, 2)) +  (pow(contours[i][0].y - contours[i][2].y, 2)) );
+			diag2 = sqrt((pow(contours[i][1].x - contours[i][3].x, 2)) +  (pow(contours[i][1].y - contours[i][3].y, 2)) );
+
+			// Is it a square?
+
+			// cout << " " <<d1 << " " << d2 << " " << d3 << " " << d4 << " " << diag1 * cos(M_PI / 4) << " " << diag2 * cos(M_PI / 4) << endl;
+
+			is_square.push_back(fabs(d1 - d2) < 20 && fabs(d1 - d2) < 20 && fabs(d1 - d3) < 20 && fabs(diag1  - diag2) < 10);
+
+			cb.push_back(contours[i]);
+		}
+	}
+
+	
+	// ------------------------> Draw contours <------------------------
+
+	// if (cb.size() > 0)
+	// {
+	// 	// Draw line (blue)
+
+	// 	for( int i = 0; i< contours.size(); i++ )		
+	// 		drawContours( drawing, contours, i, Scalar( 255, 0, 0 ), 2, 8, hierarchy, 0, Point() );
+		
+	// 	// Draw vertex (red)
+
+	// 	for (int i = 0; i < cb.size(); i++ )
+	// 		for (int j = 0; j < cb[i].size(); j++ )
+	// 			circle( drawing, cb[i][j], 2, Scalar(0, 0, 255), 3, 16);
+
+	// }
+	
+	// imshow("draw", drawing);
+
+	// ---------------------------------------------------------------------------
+
+	for (int i = 0; i < cb.size(); i++){
+		
+		minX = height_;
+		minY = width_;
+		maxX = 0;
+		maxY = 0;
+
+		for (int j = 0; j < cb[i].size(); j++){
+			
+			if (cb[i][j].x > maxX)
+				maxX = cb[i][j].x;            
+
+			if (cb[i][j].x < minX)
+				minX = cb[i][j].x;
+
+			if (cb[i][j].y > maxY)
+				maxY = cb[i][j].y;        
+
+			if (cb[i][j].y < minY)
+				minY = cb[i][j].y;
+		}
+		
+		// Save the blob from original image
+
+		blob = ocvMat_(Rect(minX, minY, maxX - minX, maxY - minY));
+
+		// Store information about the blob in a blob directory
+
+		bd.img = blob;
+		bd.origin.x = minX;
+		bd.origin.y = minY;
+		bd.is_square = is_square[i];
+
+		blob_descriptor.push_back(bd);
+
+	}
+
+	return blob_descriptor;
 }
 	
 vector<descriptor> mark_follower_class::get_blob(const Mat src){
@@ -358,7 +472,8 @@ vector<descriptor> mark_follower_class::get_blob(const Mat src){
 
 				// cout << " " <<d1 << " " << d2 << " " << d3 << " " << d4 << " " << diag1 * cos(M_PI / 4) << " " << diag2 * cos(M_PI / 4) << endl;
 				if (fabs(d1 - d2) < 20 && fabs(d1 - d2) < 20 && fabs(d1 - d3) < 20 && fabs(diag1  - diag2) < 10)
-					cb.push_back(contours[i]);
+
+				cb.push_back(contours[i]);
 
 			}else{ // THIRD_CHALLENGE
 
@@ -874,7 +989,6 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		imshow( "Detected Lines", color_dst );
 
 		
-		
 	     // END HOUGH TR
 	
 	     // FIRST CHALLENGE WORK
@@ -919,7 +1033,7 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 
 		// Get contours of the blobs
 
-		blob_desc = get_blob(thr);
+		blob_desc = get_blobFirstCh(thr);
 
 		// Call matching function on the blob descriptor discovered by get_blob()
 
@@ -929,7 +1043,8 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 		// Find out the best match
 
 		// Take target from matching
-		Point T_matching = sl.get_max();
+		bool is_square = false;
+		Point T_matching = sl.get_max(&is_square);
 
 		// // Clear sorted list
 		sl.clear();
@@ -971,9 +1086,10 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 			w2 = 1 - w1;			
 
 			//  Weighted sum
+
 			target_.x = 2 * (T_matching.x * w1 + T_Intersect.x * w2);
 			target_.y = 2 * (T_matching.y * w1 + T_Intersect.y * w2);
-
+			
 			// Kalman Filter 
 			if (!state_kf_){
 				init_kalman(target_);
@@ -985,9 +1101,18 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 			// Draw point
 			circle( ocvMat_, target_, 2, Scalar(255, 0, 0), 3, 16);
 
+
 			budgetResidual_ = 10;
 
-			refVariance_++;
+			if (is_square)
+				refVariance_++;
+			else
+				refVariance_ -= .25;
+
+			// Saturation
+
+			if(refVariance_ > 110)
+				refVariance_ = 110;
 
 		}
  
@@ -1020,7 +1145,7 @@ void mark_follower_class::imageFirstChallengeCallback(const sensor_msgs::ImageCo
 
 	gettimeofday(&time_after, NULL);
 
-	cout << "Time: " << diff_ms(time_after, time_before) << endl;
+	// cout << "Time: " << diff_ms(time_after, time_before) << endl;
 
 	/// -------------------------------------------------------------------------------------------------------------------------------------
 

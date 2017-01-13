@@ -110,6 +110,8 @@ namespace cam_vid {
 		cv::Mat otsuTH(cv::Mat, bool inv = false);
 		void t_matching(descriptor, cv::Mat);
 		vector<descriptor> get_blob(const cv::Mat);
+		vector<descriptor> get_blobFirstCh(const cv::Mat);
+		vector<descriptor> get_blobThirdCh(const cv::Mat);
 		cv::Mat adjust_rotation(descriptor);
 		void mark_obj(string, const cv::Point, const cv::Point, const cv::Scalar);
 		cv::Mat color_detection(const cv::Mat, const colors);
@@ -183,7 +185,7 @@ namespace cam_vid {
 		ros::Publisher markTarget_pub_;
 
 		int budgetResidual_;
-		int refVariance_;
+		float refVariance_;
 
 		// Flight params
 		float altitude_;

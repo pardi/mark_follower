@@ -146,7 +146,7 @@ LINK_DIRECTORIES(/usr/lib)
 # add_dependencies(mark_follower ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
-add_executable(mark_follower_node src/main.cpp src/mark_follower_class.cpp src/SortList.cpp src/KDTreeDescObj.cpp)
+add_executable(mark_follower_node src/main.cpp src/SortList.cpp  src/mark_follower_class.cpp src/KDTreeDescObj.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
