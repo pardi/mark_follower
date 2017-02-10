@@ -29,42 +29,42 @@
 #include <enum_header.h>
 #include <KDTreeDescObj.h>
 
-#define CAMERA_VID_WIDTH 	1280 
-#define CAMERA_VID_HEIGHT 	720
+#define CAMERA_VID_WIDTH 		1280 
+#define CAMERA_VID_HEIGHT 		720
 #define CAMERA_VID_BPP 		24
 
 // WHITE HSV CHANNEL
-#define CAM_WHITE_H_MIN			0
+#define CAM_WHITE_H_MIN		0
 #define CAM_WHITE_H_MAX		80
-#define CAM_WHITE_S_MIN			00
+#define CAM_WHITE_S_MIN		00
 #define CAM_WHITE_S_MAX		80
-#define CAM_WHITE_V_MIN			60
+#define CAM_WHITE_V_MIN		60
 #define CAM_WHITE_V_MAX		255
 // BLACK HSV CHANNEL
-#define CAM_BLACK_H_MIN			0
+#define CAM_BLACK_H_MIN		0
 #define CAM_BLACK_H_MAX		120
-#define CAM_BLACK_S_MIN			0	
+#define CAM_BLACK_S_MIN		0	
 #define CAM_BLACK_S_MAX		120
-#define CAM_BLACK_V_MIN			0
+#define CAM_BLACK_V_MIN		0
 #define CAM_BLACK_V_MAX		120
 // BLUE HSV CHANNEL
-#define CAM_BLUE_LH			25 // 75
-#define CAM_BLUE_HH			255
-#define CAM_BLUE_LS			125 //165 
+#define CAM_BLUE_LH				85 // 75
+#define CAM_BLUE_HH			160
+#define CAM_BLUE_LS				170 //125 
 #define CAM_BLUE_HS 			255
 #define CAM_BLUE_LV 			205
 #define CAM_BLUE_HV			255
 // RED HSV CHANNEL
-#define CAM_RED_LH			0
-#define CAM_RED_HH			35
-#define CAM_RED_LS			0
-#define CAM_RED_HS	 		255
-#define CAM_RED_LV 			55
-#define CAM_RED_HV			253
+#define CAM_RED_LH			161 //164 //0 
+#define CAM_RED_HH			255 //179 //35
+#define CAM_RED_LS			120 //229 //0
+#define CAM_RED_HS	 		255 //255
+#define CAM_RED_LV 			180 //100 //55
+#define CAM_RED_HV			255 //253
 // BLACK HSV CHANNEL
 #define CAM_BLACK_LH		0
 #define CAM_BLACK_HH		0
-#define CAM_BLACK_LS			0
+#define CAM_BLACK_LS		0
 #define CAM_BLACK_HS	 	0
 #define CAM_BLACK_LV 		0
 #define CAM_BLACK_HV		100
@@ -75,6 +75,21 @@
 #define CAM_GREEN_HS 		255
 #define CAM_GREEN_LV 		0
 #define CAM_GREEN_HV		190
+// YELLOW field HSV CHANNEL
+#define CAM_YELLOW_LH		0 
+#define CAM_YELLOW_HH		255
+#define CAM_YELLOW_LS		0
+#define CAM_YELLOW_HS 		255
+#define CAM_YELLOW_LV 		0
+#define CAM_YELLOW_HV		190
+// WHITE field HSV CHANNEL
+#define CAM_WHITE_LH		0 
+#define CAM_WHITE_HH		255
+#define CAM_WHITE_LS		0
+#define CAM_WHITE_HS 		255
+#define CAM_WHITE_LV 		180
+#define CAM_WHITE_HV		255
+
 // CHALLENGES
 #define  FIRST_CHALLENGE 	0
 #define  THIRD_CHALLENGE 	1
@@ -112,10 +127,14 @@ namespace cam_vid {
 		vector<descriptor> get_blob(const cv::Mat);
 		vector<descriptor> get_blobFirstCh(const cv::Mat);
 		vector<descriptor> get_blobThirdCh(const cv::Mat);
+		// vector<descriptor> get_blobThirdCh(const cv::Mat, const cv::Mat);
 		cv::Mat adjust_rotation(descriptor);
 		void mark_obj(string, const cv::Point, const cv::Point, const cv::Scalar);
 		cv::Mat color_detection(const cv::Mat, const colors);
 		cv::Mat remove_field(cv::Mat);
+		void calculate_histogram(cv::Mat, const int , int* );
+		cv::Point get_median(cv::Mat);
+		colors get_color(cv::Mat, cv::Point);
 
 		// Callback function
 		void imageFirstChallengeCallback(const sensor_msgs::ImageConstPtr&);
@@ -136,7 +155,7 @@ namespace cam_vid {
 		double diff_ms(const timeval, const timeval);
 
 
-		// void trial();
+		void trial();
 
 		// Variables
 

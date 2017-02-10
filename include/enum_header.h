@@ -11,7 +11,9 @@ enum colors {
 	BLUE,
 	RED,
 	GREEN,
-	BLACK
+	BLACK,
+	YELLOW,
+	WHITE
 };
 
 enum shapes {

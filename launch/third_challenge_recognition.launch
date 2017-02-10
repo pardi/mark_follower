@@ -1,5 +1,9 @@
 <launch>
 
+	<!-- Load IDS camera node -->
+
+	<include file="$(find ids_viewer)/launch/ids_viewer.launch" />
+
 	<arg name="yamlFile" default="$(find mark_follower)/conf/config_third_challenge.yaml"/>
 
     	<rosparam command="load" file="$(arg yamlFile)"/>
