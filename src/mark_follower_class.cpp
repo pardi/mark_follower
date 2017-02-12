@@ -61,8 +61,10 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 
 	// Get params
 
-	n_->param("/mark_follower/challenge", challenge_, false);
-	n_->param("/mark_follower/sitl", sitl_, false);
+	std::string ns = ros::this_node::getNamespace();
+	
+	n_->param(ns + "/mark_follower/challenge", challenge_, false);
+	n_->param(ns + "/mark_follower/sitl", sitl_, false);
 
 	ROS_INFO("Starting mark follower: %s, SITL: %s", (challenge_ == FIRST_CHALLENGE)?"First Challenge":"Third Challenge", (sitl_ == true)?"Enabled":"Disable");
 
@@ -95,9 +97,9 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 	}else{
 		// Takes image from ids camera 
 		if (challenge_ == FIRST_CHALLENGE)
-			image_tr_sub_ = it.subscribe("/ids_viewer/image", 1, &mark_follower_class::imageFirstChallengeCallback, this);
+			image_tr_sub_ = it.subscribe(ns + "/ids_viewer/image", 1, &mark_follower_class::imageFirstChallengeCallback, this);
 		else // Third Challenge
-			image_tr_sub_ = it.subscribe("/ids_viewer/image", 1, &mark_follower_class::imageThirdChallengeCallback, this);
+			image_tr_sub_ = it.subscribe(ns + "/ids_viewer/image", 1, &mark_follower_class::imageThirdChallengeCallback, this);
 	}
 
 	// -----------
@@ -110,18 +112,18 @@ mark_follower_class::mark_follower_class(ros::NodeHandle* n, const bool verbose)
 
 	// Target positions
 
-	target_pos_pub_ = n_->advertise<geometry_msgs::Pose2D>("/camera_class/target_pose", 10);
+	target_pos_pub_ = n_->advertise<geometry_msgs::Pose2D>(ns + "/camera_class/target_pose", 10);
 	
 	// Ros moving uav topic
 
     	overrideRCIn_pub_ = n_->advertise<mavros_msgs::OverrideRCIn>("/mavros/rc/override", 10);
 
-    	markTarget_pub_ = n_->advertise<mark_follower::markPoseStamped>("/mark_follower/target_pose", 10);
+    	markTarget_pub_ = n_->advertise<mark_follower::markPoseStamped>(ns + "/mark_follower/target_pose", 10);
 
 
 	// Service to get params
 
-	ros::ServiceClient client = n_->serviceClient<ids_viewer::IDSparams>("ids_viewer/params");
+	ros::ServiceClient client = n_->serviceClient<ids_viewer::IDSparams>(ns + "/ids_viewer/params");
 
 	ids_viewer::IDSparams srv;
 
