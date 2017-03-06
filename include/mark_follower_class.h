@@ -50,9 +50,9 @@
 // BLUE HSV CHANNEL
 #define CAM_BLUE_LH				85 // 75
 #define CAM_BLUE_HH			160
-#define CAM_BLUE_LS				170 //125 
+#define CAM_BLUE_LS				150 //170 
 #define CAM_BLUE_HS 			255
-#define CAM_BLUE_LV 			205
+#define CAM_BLUE_LV 			195 //205
 #define CAM_BLUE_HV			255
 // RED HSV CHANNEL
 #define CAM_RED_LH			161 //164 //0 
@@ -128,6 +128,9 @@ namespace cam_vid {
 		vector<descriptor> get_blobFirstCh(const cv::Mat);
 		vector<descriptor> get_blobThirdCh(const cv::Mat);
 		// vector<descriptor> get_blobThirdCh(const cv::Mat, const cv::Mat);
+		float tau_extraction(const cv::Mat);
+		float estimateTau(vector<Point2f>, vector<Point2f>, Point2f);
+		Point2f estimateFOE(vector<Point2f>, vector<Point2f>);
 		cv::Mat adjust_rotation(descriptor);
 		void mark_obj(string, const cv::Point, const cv::Point, const cv::Scalar);
 		cv::Mat color_detection(const cv::Mat, const colors);
@@ -179,6 +182,12 @@ namespace cam_vid {
 
 		cv::Point target_;
 
+		// Control tau
+		vector<Point2f> points_[2]; // Good point features
+		cv::Mat prevGray_;
+		cv::Mat medianWinTau_;
+		int tauCount_;
+		cv::Mat ROI_;
 
 		// SortList 
 
